@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XSLT Playground — Dark</title>
+  <style>
+    * { box-sizing: border-box; }
+
+    :root {
+      --bg: #0d1117;
+      --panel: #111827;
+      --panel2: #0f172a;
+      --border: #273244;
+      --text: #d7dde8;
+      --muted: #8b98aa;
+      --accent: #4f8cff;
+      --accent-hover: #6b9cff;
+      --editor-bg: #0b1220;
+
+      --tag: #ff7ab2;
+      --attr: #82d2ff;
+      --value: #c8e87c;
+      --comment: #6b7a90;
+      --textnode: #d7dde8;
+      --punct: #8ea1bc;
+    }
+
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    header {
+      height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      background: #0a0f18;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: .2px;
+    }
+
+    header .hint {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .app {
+      height: calc(100vh - 58px);
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) minmax(420px, 1fr);
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .left, .right {
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,.18);
+      min-height: 0;
+    }
+
+    .editor-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-title {
+      height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #d8dee9;
+      background: #121a29;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .panel-title .filename {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .editor-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: var(--editor-bg);
+      overflow: hidden;
+    }
+
+    .highlight, .code-input {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      border: 0;
+      padding: 12px 14px;
+      overflow: auto;
+      white-space: pre;
+      tab-size: 2;
+      font: 14px/1.55 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    }
+
+    .highlight {
+      pointer-events: none;
+      color: var(--textnode);
+      background: var(--editor-bg);
+      scrollbar-width: none;
+    }
+
+    .highlight::-webkit-scrollbar {
+      display: none;
+    }
+
+    .code-input {
+      resize: none;
+      outline: none;
+      color: transparent;
+      caret-color: #ffffff;
+      background: transparent;
+      -webkit-text-fill-color: transparent;
+      z-index: 2;
+      scrollbar-color: #364154 transparent;
+    }
+
+    .code-input::selection {
+      background: rgba(91, 140, 255, .35);
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tok-tag { color: var(--tag); }
+    .tok-attr { color: var(--attr); }
+    .tok-value { color: var(--value); }
+    .tok-comment { color: var(--comment); font-style: italic; }
+    .tok-punct { color: var(--punct); }
+    .tok-text { color: var(--textnode); }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px 15px;
+      font-weight: 750;
+      cursor: pointer;
+      transition: .15s ease;
+    }
+
+    #runBtn {
+      background: var(--accent);
+      color: white;
+    }
+
+    #runBtn:hover { background: var(--accent-hover); }
+
+    #resetBtn {
+      background: #172033;
+      color: #d7dde8;
+      border-color: #2b3850;
+    }
+
+    #resetBtn:hover {
+      background: #1d2940;
+    }
+
+    .status {
+      flex: 1;
+      font-size: 13px;
+      min-width: 0;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .status.ok { color: #63d297; }
+    .status.error { color: #ff7b72; }
+
+    .browser {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+    }
+
+    .browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      height: 38px;
+      padding: 0 10px;
+      background: #121a29;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #536176;
+    }
+
+    .address {
+      margin-left: 8px;
+      flex: 1;
+      padding: 5px 9px;
+      background: #0b1220;
+      border: 1px solid #2b3850;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #7f8da3;
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: white;
+    }
+
+    .error-box {
+      max-height: 140px;
+      overflow: auto;
+      padding: 10px 12px;
+      font: 12px/1.45 "SFMono-Regular", Consolas, monospace;
+      color: #ff9b92;
+      background: #241317;
+      border-top: 1px solid #5c2930;
+      display: none;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 900px) {
+      html, body { overflow: auto; height: auto; }
+      .app {
+        height: auto;
+        grid-template-columns: 1fr;
+      }
+      .left { height: 800px; }
+      .right { height: 650px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>XSLT Playground</h1>
+  <div class="hint">XML + XSLT → HTML náhled</div>
+</header>
+
+<main class="app">
+  <section class="left">
+    <div class="panel editor-panel">
+      <div class="panel-title">
+        <span>XML</span>
+        <span class="filename">data.xml</span>
+      </div>
+      <div class="editor-wrap">
+        <pre id="xmlHighlight" class="highlight" aria-hidden="true"></pre>
+        <textarea id="xmlInput" class="code-input" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <div class="panel editor-panel">
+      <div class="panel-title">
+        <span>XSLT</span>
+        <span class="filename">transformace.xsl</span>
+      </div>
+      <div class="editor-wrap">
+        <pre id="xsltHighlight" class="highlight" aria-hidden="true"></pre>
+        <textarea id="xsltInput" class="code-input" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="runBtn">▶ Spustit transformaci</button>
+      <button id="resetBtn">Obnovit příklad</button>
+      <div id="status" class="status"></div>
+    </div>
+  </section>
+
+  <section class="right">
+    <div class="panel browser">
+      <div class="browser-bar">
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <div class="address">výsledek transformace</div>
+      </div>
+      <iframe id="preview" title="Náhled výsledku"></iframe>
+      <div id="errorBox" class="error-box"></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const DEFAULT_XML = `<?xml version="1.0" encoding="UTF-8"?>
+<eshop>
+  <produkt>
+    <nazev>Notebook</nazev>
+    <cena>24990</cena>
+  </produkt>
+  <produkt>
+    <nazev>Myš</nazev>
+    <cena>590</cena>
+  </produkt>
+  <produkt>
+    <nazev>Klávesnice</nazev>
+    <cena>1290</cena>
+  </produkt>
+</eshop>`;
+
+const DEFAULT_XSLT = `<?xml version="1.0" encoding="UTF-8"?>
+<xsl:stylesheet
+  version="1.0"
+  xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+
+  <xsl:output method="html" encoding="UTF-8"/>
+
+  <xsl:template match="/">
+    <html>
+      <head>
+        <meta charset="UTF-8"/>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            padding: 30px;
+          }
+
+          .produkt {
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+          }
+        </style>
+      </head>
+
+      <body>
+        <h1>Produkty</h1>
+
+        <xsl:for-each select="eshop/produkt">
+          <div class="produkt">
+            <strong>
+              <xsl:value-of select="nazev"/>
+            </strong>
+            <br/>
+            Cena:
+            <xsl:value-of select="cena"/>
+            Kč
+          </div>
+        </xsl:for-each>
+
+      </body>
+    </html>
+  </xsl:template>
+
+</xsl:stylesheet>`;
+
+const xmlInput = document.getElementById("xmlInput");
+const xsltInput = document.getElementById("xsltInput");
+const xmlHighlight = document.getElementById("xmlHighlight");
+const xsltHighlight = document.getElementById("xsltHighlight");
+const preview = document.getElementById("preview");
+const status = document.getElementById("status");
+const errorBox = document.getElementById("errorBox");
+
+function escapeHtml(text) {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function highlightXML(source) {
+  const escaped = escapeHtml(source);
+
+  const tokens = escaped.split(/(&lt;!--[\s\S]*?--&gt;|&lt;\?[\s\S]*?\?&gt;|&lt;\/?[\s\S]*?&gt;)/g);
+
+  return tokens.map(token => {
+    if (!token) return "";
+
+    if (token.startsWith("&lt;!--")) {
+      return `<span class="tok-comment">${token}</span>`;
+    }
+
+    if (token.startsWith("&lt;?")) {
+      return highlightTag(token);
+    }
+
+    if (token.startsWith("&lt;")) {
+      return highlightTag(token);
+    }
+
+    return `<span class="tok-text">${token}</span>`;
+  }).join("");
+}
+
+function highlightTag(tag) {
+  const match = tag.match(/^(&lt;\/?|&lt;\?)([^\s\/?&]+)([\s\S]*?)(\/?&gt;|\?&gt;)$/);
+
+  if (!match) {
+    return `<span class="tok-punct">${tag}</span>`;
+  }
+
+  const open = match[1];
+  const name = match[2];
+  const middle = match[3];
+  const close = match[4];
+
+  let result =
+    `<span class="tok-punct">${open}</span>` +
+    `<span class="tok-tag">${name}</span>`;
+
+  let lastIndex = 0;
+  const attrRegex = /(\s+)([\w:.-]+)(\s*=\s*)(&quot;.*?&quot;|'[^']*')/g;
+  let attrMatch;
+
+  while ((attrMatch = attrRegex.exec(middle)) !== null) {
+    result += middle.slice(lastIndex, attrMatch.index);
+    result += attrMatch[1];
+    result += `<span class="tok-attr">${attrMatch[2]}</span>`;
+    result += `<span class="tok-punct">${attrMatch[3]}</span>`;
+    result += `<span class="tok-value">${attrMatch[4]}</span>`;
+    lastIndex = attrRegex.lastIndex;
+  }
+
+  result += middle.slice(lastIndex);
+  result += `<span class="tok-punct">${close}</span>`;
+
+  return result;
+}
+
+function syncHighlight(textarea, highlight) {
+  highlight.innerHTML = highlightXML(textarea.value) + "\n";
+  highlight.scrollTop = textarea.scrollTop;
+  highlight.scrollLeft = textarea.scrollLeft;
+}
+
+function wireEditor(textarea, highlight) {
+  textarea.addEventListener("input", () => syncHighlight(textarea, highlight));
+  textarea.addEventListener("scroll", () => {
+    highlight.scrollTop = textarea.scrollTop;
+    highlight.scrollLeft = textarea.scrollLeft;
+  });
+
+  textarea.addEventListener("keydown", (event) => {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      textarea.value =
+        textarea.value.substring(0, start) +
+        "  " +
+        textarea.value.substring(end);
+
+      textarea.selectionStart = textarea.selectionEnd = start + 2;
+      syncHighlight(textarea, highlight);
+    }
+  });
+}
+
+function parseXML(text, name) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, "application/xml");
+  const parserError = doc.querySelector("parsererror");
+
+  if (parserError) {
+    throw new Error(`${name} není platné XML:\n\n${parserError.textContent}`);
+  }
+
+  return doc;
+}
+
+function runTransformation() {
+  errorBox.style.display = "none";
+  errorBox.textContent = "";
+  status.className = "status";
+  status.textContent = "Transformuji…";
+
+  try {
+    if (typeof XSLTProcessor === "undefined") {
+      throw new Error(
+        "Tento prohlížeč nepodporuje XSLTProcessor. Zkus prosím Firefox."
+      );
+    }
+
+    const xmlDoc = parseXML(xmlInput.value, "XML");
+    const xsltDoc = parseXML(xsltInput.value, "XSLT");
+
+    const processor = new XSLTProcessor();
+    processor.importStylesheet(xsltDoc);
+
+    const resultDoc = processor.transformToDocument(xmlDoc);
+
+    let output;
+    if (resultDoc.documentElement &&
+        resultDoc.documentElement.nodeName.toLowerCase() === "html") {
+      output = "<!DOCTYPE html>\n" + resultDoc.documentElement.outerHTML;
+    } else {
+      output = new XMLSerializer().serializeToString(resultDoc);
+    }
+
+    preview.srcdoc = output;
+    status.className = "status ok";
+    status.textContent = "✓ Transformace proběhla úspěšně";
+  } catch (err) {
+    preview.srcdoc = `
+      <!DOCTYPE html>
+      <html lang="cs">
+      <body style="font-family:Arial,sans-serif;padding:30px;color:#667085">
+        Oprav chybu vlevo a spusť transformaci znovu.
+      </body>
+      </html>`;
+
+    status.className = "status error";
+    status.textContent = "✕ Transformace se nepovedla";
+
+    errorBox.textContent = err && err.message ? err.message : String(err);
+    errorBox.style.display = "block";
+  }
+}
+
+function loadDefaults() {
+  xmlInput.value = DEFAULT_XML;
+  xsltInput.value = DEFAULT_XSLT;
+  syncHighlight(xmlInput, xmlHighlight);
+  syncHighlight(xsltInput, xsltHighlight);
+  runTransformation();
+}
+
+wireEditor(xmlInput, xmlHighlight);
+wireEditor(xsltInput, xsltHighlight);
+
+document.getElementById("runBtn").addEventListener("click", runTransformation);
+document.getElementById("resetBtn").addEventListener("click", loadDefaults);
+
+document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+    event.preventDefault();
+    runTransformation();
+  }
+});
+
+loadDefaults();
+</script>
+</body>
+</html>
