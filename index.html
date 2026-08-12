@@ -161,6 +161,54 @@
     .tok-punct { color: var(--punct); }
     .tok-text { color: var(--textnode); }
 
+
+    .project-toolbar {
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .project-select {
+      width: 100%;
+      background: #0b1220;
+      color: #d7dde8;
+      border: 1px solid #2b3850;
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-weight: 650;
+      outline: none;
+    }
+
+    .toolbar-btn {
+      background: #172033;
+      color: #d7dde8;
+      border: 1px solid #2b3850;
+      padding: 9px 11px;
+    }
+
+    .toolbar-btn:hover {
+      background: #1d2940;
+    }
+
+    .toolbar-btn.danger {
+      color: #ff9b92;
+      border-color: #5c2930;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    @media (max-width: 1100px) {
+      .project-toolbar {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+      .project-select {
+        grid-column: 1 / -1;
+      }
+    }
+
     .controls {
       display: flex;
       align-items: center;
@@ -279,6 +327,17 @@
 
 <main class="app">
   <section class="left">
+
+    <div class="project-toolbar">
+      <select id="projectSelect" class="project-select" aria-label="Vybraný projekt"></select>
+      <button id="newProjectBtn" class="toolbar-btn">+ Nový</button>
+      <button id="renameProjectBtn" class="toolbar-btn">Přejmenovat</button>
+      <button id="duplicateProjectBtn" class="toolbar-btn">Duplikovat</button>
+      <button id="deleteProjectBtn" class="toolbar-btn danger">Smazat</button>
+      <button id="exportProjectBtn" class="toolbar-btn">Export</button>
+      <button id="importProjectBtn" class="toolbar-btn">Import</button>
+      <input id="importFileInput" class="file-input" type="file" accept=".json,application/json" />
+    </div>
     <div class="panel editor-panel">
       <div class="panel-title">
         <span>XML</span>
@@ -467,7 +526,10 @@ function syncHighlight(textarea, highlight) {
 }
 
 function wireEditor(textarea, highlight) {
-  textarea.addEventListener("input", () => syncHighlight(textarea, highlight));
+  textarea.addEventListener("input", () => {
+    syncHighlight(textarea, highlight);
+    scheduleSave();
+  });
   textarea.addEventListener("scroll", () => {
     highlight.scrollTop = textarea.scrollTop;
     highlight.scrollLeft = textarea.scrollLeft;
@@ -487,6 +549,261 @@ function wireEditor(textarea, highlight) {
       syncHighlight(textarea, highlight);
     }
   });
+}
+
+
+
+const STORAGE_KEY = "xslt-playground-projects-v1";
+const ACTIVE_KEY = "xslt-playground-active-project-v1";
+
+let projects = {};
+let activeProjectId = null;
+let saveTimer = null;
+
+function makeId() {
+  return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+}
+
+function createProjectObject(name, xml = DEFAULT_XML, xslt = DEFAULT_XSLT) {
+  return {
+    id: makeId(),
+    name,
+    xml,
+    xslt,
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function loadProjectsFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        projects = parsed;
+      }
+    }
+
+    activeProjectId = localStorage.getItem(ACTIVE_KEY);
+  } catch (err) {
+    projects = {};
+    activeProjectId = null;
+  }
+
+  if (!Object.keys(projects).length) {
+    const first = createProjectObject("E-shop");
+    projects[first.id] = first;
+    activeProjectId = first.id;
+    persistProjects();
+  }
+
+  if (!projects[activeProjectId]) {
+    activeProjectId = Object.keys(projects)[0];
+  }
+}
+
+function persistProjects() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+    localStorage.setItem(ACTIVE_KEY, activeProjectId);
+  } catch (err) {
+    status.className = "status error";
+    status.textContent = "✕ Nepodařilo se uložit projekty";
+  }
+}
+
+function renderProjectSelect() {
+  const select = document.getElementById("projectSelect");
+  select.innerHTML = "";
+
+  Object.values(projects)
+    .sort((a, b) => a.name.localeCompare(b.name, "cs"))
+    .forEach(project => {
+      const option = document.createElement("option");
+      option.value = project.id;
+      option.textContent = project.name;
+      if (project.id === activeProjectId) option.selected = true;
+      select.appendChild(option);
+    });
+}
+
+function loadActiveProject() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  xmlInput.value = project.xml;
+  xsltInput.value = project.xslt;
+
+  syncHighlight(xmlInput, xmlHighlight);
+  syncHighlight(xsltInput, xsltHighlight);
+  runTransformation();
+
+  status.className = "status ok";
+  status.textContent = `✓ Načten projekt „${project.name}“`;
+}
+
+function saveActiveProject() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  project.xml = xmlInput.value;
+  project.xslt = xsltInput.value;
+  project.updatedAt = new Date().toISOString();
+
+  persistProjects();
+
+  if (!status.classList.contains("error")) {
+    status.className = "status ok";
+    status.textContent = `✓ Projekt „${project.name}“ uložen`;
+  }
+}
+
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveActiveProject, 350);
+}
+
+function addProject(name = null, xml = DEFAULT_XML, xslt = DEFAULT_XSLT) {
+  const projectName = (name || prompt("Název nového projektu:", "Nový projekt") || "").trim();
+  if (!projectName) return;
+
+  const project = createProjectObject(projectName, xml, xslt);
+  projects[project.id] = project;
+  activeProjectId = project.id;
+
+  persistProjects();
+  renderProjectSelect();
+  loadActiveProject();
+}
+
+function renameProject() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  const name = (prompt("Nový název projektu:", project.name) || "").trim();
+  if (!name) return;
+
+  project.name = name;
+  project.updatedAt = new Date().toISOString();
+
+  persistProjects();
+  renderProjectSelect();
+
+  status.className = "status ok";
+  status.textContent = `✓ Projekt přejmenován na „${name}“`;
+}
+
+function duplicateProject() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  saveActiveProject();
+
+  const copy = createProjectObject(
+    project.name + " – kopie",
+    project.xml,
+    project.xslt
+  );
+
+  projects[copy.id] = copy;
+  activeProjectId = copy.id;
+
+  persistProjects();
+  renderProjectSelect();
+  loadActiveProject();
+}
+
+function deleteProject() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  const ok = confirm(`Opravdu smazat projekt „${project.name}“?`);
+  if (!ok) return;
+
+  delete projects[activeProjectId];
+
+  if (!Object.keys(projects).length) {
+    const fresh = createProjectObject("E-shop");
+    projects[fresh.id] = fresh;
+  }
+
+  activeProjectId = Object.keys(projects)[0];
+  persistProjects();
+  renderProjectSelect();
+  loadActiveProject();
+}
+
+function exportActiveProject() {
+  saveActiveProject();
+
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  const payload = {
+    format: "xslt-playground-project",
+    version: 1,
+    name: project.name,
+    xml: project.xml,
+    xslt: project.xslt,
+    exportedAt: new Date().toISOString()
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: "application/json"
+  });
+
+  const safeName = project.name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "xslt-project";
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = safeName + ".json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  status.className = "status ok";
+  status.textContent = `✓ Projekt „${project.name}“ exportován`;
+}
+
+async function importProjectFromFile(file) {
+  try {
+    const raw = await file.text();
+    const data = JSON.parse(raw);
+
+    if (!data || data.format !== "xslt-playground-project" ||
+        typeof data.xml !== "string" ||
+        typeof data.xslt !== "string") {
+      throw new Error("Soubor není platný export z XSLT Playgroundu.");
+    }
+
+    const imported = createProjectObject(
+      (data.name || "Importovaný projekt") + " – import",
+      data.xml,
+      data.xslt
+    );
+
+    projects[imported.id] = imported;
+    activeProjectId = imported.id;
+
+    persistProjects();
+    renderProjectSelect();
+    loadActiveProject();
+
+    status.className = "status ok";
+    status.textContent = `✓ Importován projekt „${imported.name}“`;
+  } catch (err) {
+    status.className = "status error";
+    status.textContent = "✕ Import se nepovedl";
+    errorBox.textContent = err && err.message ? err.message : String(err);
+    errorBox.style.display = "block";
+  }
 }
 
 function parseXML(text, name) {
@@ -551,10 +868,17 @@ function runTransformation() {
 }
 
 function loadDefaults() {
+  const project = projects[activeProjectId];
+  if (!project) return;
+
+  const ok = confirm(`Obnovit výchozí ukázku v projektu „${project.name}“?`);
+  if (!ok) return;
+
   xmlInput.value = DEFAULT_XML;
   xsltInput.value = DEFAULT_XSLT;
   syncHighlight(xmlInput, xmlHighlight);
   syncHighlight(xsltInput, xsltHighlight);
+  saveActiveProject();
   runTransformation();
 }
 
@@ -564,14 +888,44 @@ wireEditor(xsltInput, xsltHighlight);
 document.getElementById("runBtn").addEventListener("click", runTransformation);
 document.getElementById("resetBtn").addEventListener("click", loadDefaults);
 
+document.getElementById("projectSelect").addEventListener("change", (event) => {
+  saveActiveProject();
+  activeProjectId = event.target.value;
+  persistProjects();
+  loadActiveProject();
+});
+
+document.getElementById("newProjectBtn").addEventListener("click", () => addProject());
+document.getElementById("renameProjectBtn").addEventListener("click", renameProject);
+document.getElementById("duplicateProjectBtn").addEventListener("click", duplicateProject);
+document.getElementById("deleteProjectBtn").addEventListener("click", deleteProject);
+document.getElementById("exportProjectBtn").addEventListener("click", exportActiveProject);
+
+document.getElementById("importProjectBtn").addEventListener("click", () => {
+  document.getElementById("importFileInput").click();
+});
+
+document.getElementById("importFileInput").addEventListener("change", async (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (file) await importProjectFromFile(file);
+  event.target.value = "";
+});
+
 document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
     event.preventDefault();
     runTransformation();
   }
+
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    saveActiveProject();
+  }
 });
 
-loadDefaults();
+loadProjectsFromStorage();
+renderProjectSelect();
+loadActiveProject();
 </script>
 </body>
 </html>
