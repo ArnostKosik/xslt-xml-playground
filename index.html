@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -167,7 +167,7 @@
 
     .project-toolbar {
       display: grid;
-      grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
+      grid-template-columns: minmax(180px, 1fr) repeat(7, auto);
       gap: 8px;
       align-items: center;
     }
@@ -328,7 +328,7 @@
 <body>
 <header>
   <h1>XSLT Playground</h1>
-  <div class="hint">XML + XSLT → HTML náhled</div>
+  <div class="hint">XML + XSLT → HTML Preview</div>
 </header>
 
 <main class="app">
@@ -336,13 +336,16 @@
 
     <div class="project-toolbar">
       <select id="projectSelect" class="project-select" aria-label="Vybraný projekt"></select>
-      <button id="newProjectBtn" class="toolbar-btn">+ Nový</button>
-      <button id="renameProjectBtn" class="toolbar-btn">Přejmenovat</button>
-      <button id="duplicateProjectBtn" class="toolbar-btn">Duplikovat</button>
-      <button id="deleteProjectBtn" class="toolbar-btn danger">Smazat</button>
+      <button id="newProjectBtn" class="toolbar-btn">+ New</button>
+      <button id="renameProjectBtn" class="toolbar-btn">Rename</button>
+      <button id="duplicateProjectBtn" class="toolbar-btn">Duplicate</button>
+      <button id="deleteProjectBtn" class="toolbar-btn danger">Delete</button>
       <button id="exportProjectBtn" class="toolbar-btn">Export</button>
       <button id="importProjectBtn" class="toolbar-btn">Import</button>
+      <button id="exportAllBtn" class="toolbar-btn">Export All</button>
+      <button id="importAllBtn" class="toolbar-btn">Import All</button>
       <input id="importFileInput" class="file-input" type="file" accept=".json,application/json" />
+      <input id="importAllFileInput" class="file-input" type="file" accept=".json,application/json" />
     </div>
     <div id="xmlPanel" class="panel editor-panel">
       <div class="panel-title">
@@ -367,8 +370,8 @@
     </div>
 
     <div class="controls">
-      <button id="runBtn">▶ Spustit transformaci</button>
-      <button id="resetBtn">Obnovit příklad</button>
+      <button id="runBtn">▶ Run Transformation</button>
+      <button id="resetBtn">Reset Example</button>
       <div id="status" class="status"></div>
     </div>
   </section>
@@ -379,7 +382,7 @@
         <span class="dot dot-red"></span>
         <span class="dot dot-yellow"></span>
         <span class="dot dot-green"></span>
-        <div class="address">výsledek transformace</div>
+        <div class="address">transformation result</div>
       </div>
       <iframe id="preview" title="Náhled výsledku"></iframe>
       <div id="errorBox" class="error-box"></div>
@@ -614,7 +617,7 @@ function persistProjects() {
     localStorage.setItem(ACTIVE_KEY, activeProjectId);
   } catch (err) {
     status.className = "status error";
-    status.textContent = "✕ Nepodařilo se uložit projekty";
+    status.textContent = "✕ Could not save projects";
   }
 }
 
@@ -645,7 +648,7 @@ function loadActiveProject() {
   runTransformation();
 
   status.className = "status ok";
-  status.textContent = `✓ Načten projekt „${project.name}“`;
+  status.textContent = `✓ Loaded project „${project.name}“`;
 }
 
 function saveActiveProject() {
@@ -660,7 +663,7 @@ function saveActiveProject() {
 
   if (!status.classList.contains("error")) {
     status.className = "status ok";
-    status.textContent = `✓ Projekt „${project.name}“ uložen`;
+    status.textContent = `✓ Project “${project.name}” saved`;
   }
 }
 
@@ -670,7 +673,7 @@ function scheduleSave() {
 }
 
 function addProject(name = null, xml = DEFAULT_XML, xslt = DEFAULT_XSLT) {
-  const projectName = (name || prompt("Název nového projektu:", "Nový projekt") || "").trim();
+  const projectName = (name || prompt("New project name:", "New Project") || "").trim();
   if (!projectName) return;
 
   const project = createProjectObject(projectName, xml, xslt);
@@ -686,7 +689,7 @@ function renameProject() {
   const project = projects[activeProjectId];
   if (!project) return;
 
-  const name = (prompt("Nový název projektu:", project.name) || "").trim();
+  const name = (prompt("New project name:", project.name) || "").trim();
   if (!name) return;
 
   project.name = name;
@@ -696,7 +699,7 @@ function renameProject() {
   renderProjectSelect();
 
   status.className = "status ok";
-  status.textContent = `✓ Projekt přejmenován na „${name}“`;
+  status.textContent = `✓ Project renamed to „${name}“`;
 }
 
 function duplicateProject() {
@@ -706,7 +709,7 @@ function duplicateProject() {
   saveActiveProject();
 
   const copy = createProjectObject(
-    project.name + " – kopie",
+    project.name + " – copy",
     project.xml,
     project.xslt
   );
@@ -723,7 +726,7 @@ function deleteProject() {
   const project = projects[activeProjectId];
   if (!project) return;
 
-  const ok = confirm(`Opravdu smazat projekt „${project.name}“?`);
+  const ok = confirm(`Really delete project „${project.name}“?`);
   if (!ok) return;
 
   delete projects[activeProjectId];
@@ -775,7 +778,7 @@ function exportActiveProject() {
   URL.revokeObjectURL(url);
 
   status.className = "status ok";
-  status.textContent = `✓ Projekt „${project.name}“ exportován`;
+  status.textContent = `✓ Project “${project.name}” exported`;
 }
 
 async function importProjectFromFile(file) {
@@ -786,11 +789,11 @@ async function importProjectFromFile(file) {
     if (!data || data.format !== "xslt-playground-project" ||
         typeof data.xml !== "string" ||
         typeof data.xslt !== "string") {
-      throw new Error("Soubor není platný export z XSLT Playgroundu.");
+      throw new Error("The file is not a valid XSLT Playground export.");
     }
 
     const imported = createProjectObject(
-      (data.name || "Importovaný projekt") + " – import",
+      (data.name || "Imported Project") + " – import",
       data.xml,
       data.xslt
     );
@@ -803,10 +806,73 @@ async function importProjectFromFile(file) {
     loadActiveProject();
 
     status.className = "status ok";
-    status.textContent = `✓ Importován projekt „${imported.name}“`;
+    status.textContent = `✓ Imported project “${imported.name}”`;
   } catch (err) {
     status.className = "status error";
-    status.textContent = "✕ Import se nepovedl";
+    status.textContent = "✕ Import failed";
+    errorBox.textContent = err && err.message ? err.message : String(err);
+    errorBox.style.display = "block";
+  }
+}
+
+
+function exportAllProjects() {
+  saveActiveProject();
+  const payload = {
+    format: "xslt-playground-backup",
+    version: 1,
+    activeProjectId,
+    projects: Object.values(projects),
+    exportedAt: new Date().toISOString()
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "xslt-playground-backup.json";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  status.className = "status ok";
+  status.textContent = "✓ All projects exported";
+}
+
+async function importAllProjectsFromFile(file) {
+  try {
+    const raw = await file.text();
+    const data = JSON.parse(raw);
+    if (!data || data.format !== "xslt-playground-backup" || !Array.isArray(data.projects)) {
+      throw new Error("The file is not a valid XSLT Playground backup.");
+    }
+    const mode = prompt('Import mode:\n\nType "add" to keep existing projects and add the backup.\nType "replace" to replace all existing projects.', 'add');
+    if (mode === null) return;
+    const normalized = mode.trim().toLowerCase();
+    if (normalized !== "add" && normalized !== "replace") {
+      throw new Error('Import cancelled: type either "add" or "replace".');
+    }
+    if (normalized === "replace") projects = {};
+    let firstImportedId = null;
+    for (const item of data.projects) {
+      if (!item || typeof item.name !== "string" || typeof item.xml !== "string" || typeof item.xslt !== "string") continue;
+      const imported = createProjectObject(item.name, item.xml, item.xslt);
+      projects[imported.id] = imported;
+      if (!firstImportedId) firstImportedId = imported.id;
+    }
+    if (!Object.keys(projects).length) {
+      const fallback = createProjectObject("E-shop");
+      projects[fallback.id] = fallback;
+      firstImportedId = fallback.id;
+    }
+    activeProjectId = firstImportedId || Object.keys(projects)[0];
+    persistProjects();
+    renderProjectSelect();
+    loadActiveProject();
+    status.className = "status ok";
+    status.textContent = normalized === "replace" ? "✓ Backup imported; existing projects replaced" : "✓ Backup imported and added to existing projects";
+  } catch (err) {
+    status.className = "status error";
+    status.textContent = "✕ Backup import failed";
     errorBox.textContent = err && err.message ? err.message : String(err);
     errorBox.style.display = "block";
   }
@@ -818,7 +884,7 @@ function parseXML(text, name) {
   const parserError = doc.querySelector("parsererror");
 
   if (parserError) {
-    throw new Error(`${name} není platné XML:\n\n${parserError.textContent}`);
+    throw new Error(`${name} is not valid XML:\n\n${parserError.textContent}`);
   }
 
   return doc;
@@ -828,12 +894,12 @@ function runTransformation() {
   errorBox.style.display = "none";
   errorBox.textContent = "";
   status.className = "status";
-  status.textContent = "Transformuji…";
+  status.textContent = "Transforming…";
 
   try {
     if (typeof XSLTProcessor === "undefined") {
       throw new Error(
-        "Tento prohlížeč nepodporuje XSLTProcessor. Zkus prosím Firefox."
+        "This browser does not support XSLTProcessor. Please try Firefox."
       );
     }
 
@@ -855,18 +921,18 @@ function runTransformation() {
 
     preview.srcdoc = output;
     status.className = "status ok";
-    status.textContent = "✓ Transformace proběhla úspěšně";
+    status.textContent = "✓ Transformation completed successfully";
   } catch (err) {
     preview.srcdoc = `
       <!DOCTYPE html>
-      <html lang="cs">
+      <html lang="en">
       <body style="font-family:Arial,sans-serif;padding:30px;color:#667085">
-        Oprav chybu vlevo a spusť transformaci znovu.
+        Fix the error on the left and run the transformation again.
       </body>
       </html>`;
 
     status.className = "status error";
-    status.textContent = "✕ Transformace se nepovedla";
+    status.textContent = "✕ Transformation failed";
 
     errorBox.textContent = err && err.message ? err.message : String(err);
     errorBox.style.display = "block";
@@ -877,7 +943,7 @@ function loadDefaults() {
   const project = projects[activeProjectId];
   if (!project) return;
 
-  const ok = confirm(`Obnovit výchozí ukázku v projektu „${project.name}“?`);
+  const ok = confirm(`Reset the default example in project „${project.name}“?`);
   if (!ok) return;
 
   xmlInput.value = DEFAULT_XML;
@@ -909,6 +975,16 @@ document.getElementById("exportProjectBtn").addEventListener("click", exportActi
 
 document.getElementById("importProjectBtn").addEventListener("click", () => {
   document.getElementById("importFileInput").click();
+});
+
+document.getElementById("exportAllBtn").addEventListener("click", exportAllProjects);
+document.getElementById("importAllBtn").addEventListener("click", () => {
+  document.getElementById("importAllFileInput").click();
+});
+document.getElementById("importAllFileInput").addEventListener("change", async (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (file) await importAllProjectsFromFile(file);
+  event.target.value = "";
 });
 
 document.getElementById("importFileInput").addEventListener("change", async (event) => {
