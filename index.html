@@ -82,10 +82,13 @@
     }
 
     .editor-panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
+      flex: 1; display: flex; flex-direction: column; transition: flex .18s ease;
     }
+    .editor-panel.collapsed { flex: 0 0 38px; }
+    .editor-panel.collapsed .editor-wrap { display: none; }
+    .panel-title-actions { display:flex; align-items:center; gap:8px; }
+    .collapse-btn { width:28px; height:26px; padding:0; border:1px solid #2b3850; border-radius:6px; background:#172033; color:#d7dde8; font-size:16px; cursor:pointer; }
+    .collapse-btn:hover { background:#1d2940; }
 
     .panel-title {
       height: 38px;
@@ -275,8 +278,11 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #536176;
     }
+
+    .dot-red { background: #ff5f57; }
+    .dot-yellow { background: #febc2e; }
+    .dot-green { background: #28c840; }
 
     .address {
       margin-left: 8px;
@@ -338,10 +344,10 @@
       <button id="importProjectBtn" class="toolbar-btn">Import</button>
       <input id="importFileInput" class="file-input" type="file" accept=".json,application/json" />
     </div>
-    <div class="panel editor-panel">
+    <div id="xmlPanel" class="panel editor-panel">
       <div class="panel-title">
         <span>XML</span>
-        <span class="filename">data.xml</span>
+        <div class="panel-title-actions"><span class="filename">data.xml</span><button id="toggleXmlBtn" class="collapse-btn" type="button">−</button></div>
       </div>
       <div class="editor-wrap">
         <pre id="xmlHighlight" class="highlight" aria-hidden="true"></pre>
@@ -349,10 +355,10 @@
       </div>
     </div>
 
-    <div class="panel editor-panel">
+    <div id="xsltPanel" class="panel editor-panel">
       <div class="panel-title">
         <span>XSLT</span>
-        <span class="filename">transformace.xsl</span>
+        <div class="panel-title-actions"><span class="filename">transformace.xsl</span><button id="toggleXsltBtn" class="collapse-btn" type="button">−</button></div>
       </div>
       <div class="editor-wrap">
         <pre id="xsltHighlight" class="highlight" aria-hidden="true"></pre>
@@ -370,9 +376,9 @@
   <section class="right">
     <div class="panel browser">
       <div class="browser-bar">
-        <span class="dot"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
+        <span class="dot dot-red"></span>
+        <span class="dot dot-yellow"></span>
+        <span class="dot dot-green"></span>
         <div class="address">výsledek transformace</div>
       </div>
       <iframe id="preview" title="Náhled výsledku"></iframe>
@@ -923,6 +929,16 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+
+function setupCollapsibleEditors() {
+ const xp=document.getElementById("xmlPanel"), sp=document.getElementById("xsltPanel");
+ const xb=document.getElementById("toggleXmlBtn"), sb=document.getElementById("toggleXsltBtn");
+ function refresh(){xb.textContent=xp.classList.contains("collapsed")?"+":"−"; sb.textContent=sp.classList.contains("collapsed")?"+":"−";}
+ function toggle(p,o){if(!p.classList.contains("collapsed")&&o.classList.contains("collapsed"))o.classList.remove("collapsed");p.classList.toggle("collapsed");refresh();}
+ xb.addEventListener("click",()=>toggle(xp,sp)); sb.addEventListener("click",()=>toggle(sp,xp)); refresh();
+}
+
+setupCollapsibleEditors();
 loadProjectsFromStorage();
 renderProjectSelect();
 loadActiveProject();
